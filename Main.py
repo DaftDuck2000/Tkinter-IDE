@@ -46,9 +46,17 @@ class MainWindow(tk.Tk):
         run_menu = tk.Menu(menubar, tearoff=0)
 
         # Run Local
-        run_menu.add_command(label="Run Locally", command=self.run_local)
+        run_menu.add_command(label="Run", command=self.run_local)
 
         menubar.add_cascade(label="Run", menu=run_menu)
+
+        # Edit Menu
+        edit_menu = tk.Menu(menubar, tearoff=0)
+
+        # Find
+        edit_menu.add_command(label="Find", command=self.find_text)
+
+        menubar.add_cascade(label="Edit", menu=edit_menu)
 
         self.config(menu=menubar)
 
@@ -91,6 +99,16 @@ class MainWindow(tk.Tk):
         self.context_menu.add_command(label="Rename", command=self.rename_item)
         self.context_menu.add_command(label="Delete", command=self.delete_item)
 
+        # Create a context menu for blank space
+        self.context_menu_blank_space = tk.Menu(self, tearoff=0)
+        self.context_menu_blank_space.add_command(label="New File", command=self.new_file)
+        # self.context_menu_blank_space.add_command(label="New Folder", command=self.new_folder)
+
+        # Initialize search variables
+        self.search_matches = []
+        self.current_match_index = -1
+        self.search_window = None
+
     def show_context_menu(self, event):
         # Select the item under the mouse pointer
         item = self.dir_tree.identify_row(event.y)
@@ -99,12 +117,10 @@ class MainWindow(tk.Tk):
             self.context_menu.post(event.x_root, event.y_root)
         else:
             # If clicked on blank space, show a menu to create new file or folder
-            self.context_menu_blank_space.post(event.x_root, event.y_root)
-
-        # Create a context menu for blank space
-        self.context_menu_blank_space = tk.Menu(self, tearoff=0)
-        self.context_menu_blank_space.add_command(label="New File", command=self.new_file)
-        # self.context_menu_blank_space.add_command(label="New Folder", command=self.new_folder)
+            try:
+                self.context_menu_blank_space.post(event.x_root, event.y_root)
+            except:
+                pass
 
     def rename_item(self):
         selected_item = self.dir_tree.selection()[0]
@@ -236,6 +252,68 @@ class MainWindow(tk.Tk):
                 subprocess.run(["python", self.current_file])
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to run file: {e}")
+
+    def find_text(self):
+        search_term = simpledialog.askstring("Find", "Enter text to find:")
+        if search_term:
+            self.highlight_text(search_term)
+            self.create_search_window()
+
+    def highlight_text(self, search_term):
+        self.editor.tag_remove('highlight', '1.0', tk.END)
+        self.search_matches = []
+        start_pos = '1.0'
+        while True:
+            start_pos = self.editor.search(search_term, start_pos, stopindex=tk.END)
+            if not start_pos:
+                break
+            end_pos = f'{start_pos}+{len(search_term)}c'
+            self.editor.tag_add('highlight', start_pos, end_pos)
+            self.search_matches.append((start_pos, end_pos))
+            start_pos = end_pos
+        self.editor.tag_config('highlight', background='yellow', foreground='black')
+        self.current_match_index = 0
+        self.scroll_to_match()
+
+    def create_search_window(self):
+        self.search_window = tk.Toplevel(self)
+        self.search_window.title("Find")
+        self.search_window.geometry("220x50")
+        
+        next_button = tk.Button(self.search_window, text="Next", command=self.next_match)
+        next_button.pack(side=tk.LEFT, padx=10, pady=10)
+        
+        prev_button = tk.Button(self.search_window, text="Previous", command=self.previous_match)
+        prev_button.pack(side=tk.LEFT, padx=10, pady=10)
+        
+        cancel_button = tk.Button(self.search_window, text="Cancel", command=self.cancel_search)
+        cancel_button.pack(side=tk.LEFT, padx=10, pady=10)
+        
+    def scroll_to_match(self):
+        if self.search_matches:
+            match = self.search_matches[self.current_match_index]
+            self.editor.see(match[0])
+            self.editor.mark_set("insert", match[0])
+            self.editor.tag_remove('current_match', '1.0', tk.END)
+            self.editor.tag_add('current_match', match[0], match[1])
+            self.editor.tag_config('current_match', background='orange')
+
+    def next_match(self):
+        if self.search_matches:
+            self.current_match_index = (self.current_match_index + 1) % len(self.search_matches)
+            self.scroll_to_match()
+
+    def previous_match(self):
+        if self.search_matches:
+            self.current_match_index = (self.current_match_index - 1) % len(self.search_matches)
+            self.scroll_to_match()
+
+    def cancel_search(self):
+        self.editor.tag_remove('highlight', '1.0', tk.END)
+        self.editor.tag_remove('current_match', '1.0', tk.END)
+        if self.search_window:
+            self.search_window.destroy()
+            self.search_window = None
 
 def main():
     app = MainWindow()
