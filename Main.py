@@ -249,7 +249,7 @@ class MainWindow(tk.Tk):
     def run_local(self):
         if self.current_file:
             try:
-                subprocess.run(["python", self.current_file])
+                subprocess.run(["python3", self.current_file])
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to run file: {e}")
 
