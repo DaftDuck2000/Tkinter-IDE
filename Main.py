@@ -4,6 +4,8 @@ import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, simpledialog
 import tkinter.ttk as ttk
+import keyword as kw
+import re
 
 class MainWindow(tk.Tk):
     def __init__(self):
@@ -77,10 +79,16 @@ class MainWindow(tk.Tk):
         self.editor = scrolledtext.ScrolledText(self, wrap=tk.WORD)
         self.editor.place(x=260, y=50, width=1200, height=800)
 
-        # Update line numbers when the content of the editor changes
-        self.editor.bind('<KeyRelease>', self.update_line_numbers)
-        self.editor.bind('<MouseWheel>', self.update_line_numbers)
+        # Link scroll events
+        self.editor.bind('<KeyRelease>', self.on_key_release)
+        self.editor.bind('<MouseWheel>', self.sync_scroll)
         self.editor.bind('<Button-1>', self.update_line_numbers)
+        self.editor.bind('<Button-4>', self.sync_scroll)  # For Linux
+        self.editor.bind('<Button-5>', self.sync_scroll)  # For Linux
+
+        self.line_numbers.bind('<MouseWheel>', self.sync_scroll)
+        self.line_numbers.bind('<Button-4>', self.sync_scroll)  # For Linux
+        self.line_numbers.bind('<Button-5>', self.sync_scroll)  # For Linux
 
         # Initialize current_file and current_folder
         self.current_file = ''
@@ -108,6 +116,12 @@ class MainWindow(tk.Tk):
         self.search_matches = []
         self.current_match_index = -1
         self.search_window = None
+
+        # Add tags for syntax highlighting
+        self.editor.tag_configure("keyword", foreground="blue")
+        self.editor.tag_configure("string", foreground="green")
+        self.editor.tag_configure("comment", foreground="grey")
+        self.editor.tag_configure("function", foreground="purple")
 
     def show_context_menu(self, event):
         # Select the item under the mouse pointer
@@ -194,6 +208,7 @@ class MainWindow(tk.Tk):
                     self.editor.insert(tk.END, f.read())
                 self.current_file = file_path
                 self.update_line_numbers()
+                self.highlight_syntax()
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to open file: {e}")
 
@@ -206,6 +221,12 @@ class MainWindow(tk.Tk):
 
         self.line_numbers.config(state='disabled')
 
+    def sync_scroll(self, event):
+        # Get the current scroll position of the editor
+        editor_scroll = self.editor.yview()
+        # Update the scroll position of the line numbers to match the editor
+        self.line_numbers.yview_moveto(editor_scroll[0])
+
     def open_file(self):
         file_path = filedialog.askopenfilename(title='Open File')
         if file_path:
@@ -214,15 +235,9 @@ class MainWindow(tk.Tk):
     def save_as(self):
         if self.current_file:
             file_path = filedialog.asksaveasfilename(initialfile=self.current_file, title='Save As')
-        else:
-            file_path = filedialog.asksaveasfilename(title='Save As')
-        if file_path:
-            try:
-                with open(file_path, "w") as f:
-                    f.write(self.editor.get('1.0', tk.END))
+            if file_path:
                 self.current_file = file_path
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to save file: {e}")
+                self.save()
 
     def save(self):
         if self.current_file:
@@ -243,6 +258,7 @@ class MainWindow(tk.Tk):
                     self.editor.insert(tk.END, f.read())
                 self.current_file = file_path
                 self.update_line_numbers()
+                self.highlight_syntax()
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to create new file: {e}")
 
@@ -279,16 +295,16 @@ class MainWindow(tk.Tk):
         self.search_window = tk.Toplevel(self)
         self.search_window.title("Find")
         self.search_window.geometry("220x50")
-        
+
         next_button = tk.Button(self.search_window, text="Next", command=self.next_match)
         next_button.pack(side=tk.LEFT, padx=10, pady=10)
-        
+
         prev_button = tk.Button(self.search_window, text="Previous", command=self.previous_match)
         prev_button.pack(side=tk.LEFT, padx=10, pady=10)
-        
+
         cancel_button = tk.Button(self.search_window, text="Cancel", command=self.cancel_search)
         cancel_button.pack(side=tk.LEFT, padx=10, pady=10)
-        
+
     def scroll_to_match(self):
         if self.search_matches:
             match = self.search_matches[self.current_match_index]
@@ -314,6 +330,52 @@ class MainWindow(tk.Tk):
         if self.search_window:
             self.search_window.destroy()
             self.search_window = None
+
+    def on_key_release(self, event):
+        self.highlight_syntax()
+        self.update_line_numbers()
+
+    def highlight_syntax(self):
+        self.editor.tag_remove("keyword", "1.0", tk.END)
+        self.editor.tag_remove("string", "1.0", tk.END)
+        self.editor.tag_remove("comment", "1.0", tk.END)
+        self.editor.tag_remove("function", "1.0", tk.END)
+
+        content = self.editor.get("1.0", tk.END)
+
+        # Keywords
+        for kw_word in kw.kwlist:
+            start_pos = "1.0"
+            while True:
+                start_pos = self.editor.search(r'\b' + kw_word + r'\b', start_pos, stopindex=tk.END, regexp=True)
+                if not start_pos:
+                    break
+                end_pos = f"{start_pos}+{len(kw_word)}c"
+                self.editor.tag_add("keyword", start_pos, end_pos)
+                start_pos = end_pos
+
+        # Strings
+        for match in re.finditer(r'(\".*?\"|\'.*?\')', content):
+            start_pos = f"1.0+{match.start()}c"
+            end_pos = f"1.0+{match.end()}c"
+            self.editor.tag_add("string", start_pos, end_pos)
+
+        # Comments
+        for match in re.finditer(r'#[^\n]*', content):
+            start_pos = f"1.0+{match.start()}c"
+            end_pos = f"1.0+{match.end()}c"
+            self.editor.tag_add("comment", start_pos, end_pos)
+
+        # Functions (highlighting the 'def' keyword and function name)
+        for match in re.finditer(r'\bdef\b\s+(\w+)', content):
+            start_pos = f"1.0+{match.start()}c"
+            end_pos = f"1.0+{match.start()}c+3c"  # Highlight 'def'
+            self.editor.tag_add("keyword", start_pos, end_pos)
+
+            start_pos = f"1.0+{match.start(1)}c"
+            end_pos = f"1.0+{match.end(1)}c"
+            self.editor.tag_add("function", start_pos, end_pos)
+
 
 def main():
     app = MainWindow()
