@@ -122,6 +122,12 @@ class MainWindow(tk.Tk):
         self.editor.tag_configure("string", foreground="green")
         self.editor.tag_configure("comment", foreground="red")
         self.editor.tag_configure("function", foreground="purple")
+        self.editor.tag_configure("import", foreground="orange")
+        self.editor.tag_configure("class", foreground="orange")
+        self.editor.tag_configure("variable", foreground="blue")
+        self.editor.tag_configure("special_keyword", foreground="orange")
+        self.editor.tag_configure("special_keyword", foreground="orange")
+        self.editor.tag_configure("builtin_function", foreground="purple")
 
     def show_context_menu(self, event):
         # Select the item under the mouse pointer
@@ -340,6 +346,11 @@ class MainWindow(tk.Tk):
         self.editor.tag_remove("string", "1.0", tk.END)
         self.editor.tag_remove("comment", "1.0", tk.END)
         self.editor.tag_remove("function", "1.0", tk.END)
+        self.editor.tag_remove("import", "1.0", tk.END)
+        self.editor.tag_remove("class", "1.0", tk.END)
+        self.editor.tag_remove("variable", "1.0", tk.END)
+        self.editor.tag_remove("special_keyword", "1.0", tk.END)
+        self.editor.tag_remove("builtin_function", "1.0", tk.END)
 
         content = self.editor.get("1.0", tk.END)
 
@@ -352,6 +363,18 @@ class MainWindow(tk.Tk):
                     break
                 end_pos = f"{start_pos}+{len(kw_word)}c"
                 self.editor.tag_add("keyword", start_pos, end_pos)
+                start_pos = end_pos
+
+        # Special keywords
+        special_keywords = ['return', 'True', 'False', 'if', 'not', 'and', 'or', 'pass']
+        for special_kw in special_keywords:
+            start_pos = "1.0"
+            while True:
+                start_pos = self.editor.search(r'\b' + special_kw + r'\b', start_pos, stopindex=tk.END, regexp=True)
+                if not start_pos:
+                    break
+                end_pos = f"{start_pos}+{len(special_kw)}c"
+                self.editor.tag_add("special_keyword", start_pos, end_pos)
                 start_pos = end_pos
 
         # Strings
@@ -375,6 +398,45 @@ class MainWindow(tk.Tk):
             start_pos = f"1.0+{match.start(1)}c"
             end_pos = f"1.0+{match.end(1)}c"
             self.editor.tag_add("function", start_pos, end_pos)
+
+        # Imports
+        for match in re.finditer(r'\bimport\b\s+(\w+)', content):
+            start_pos = f"1.0+{match.start()}c"
+            end_pos = f"1.0+{match.start()}c+6c"  # Highlight 'import'
+            self.editor.tag_add("import", start_pos, end_pos)
+
+            start_pos = f"1.0+{match.start(1)}c"
+            end_pos = f"1.0+{match.end(1)}c"
+            self.editor.tag_add("variable", start_pos, end_pos)
+
+        # Classes
+        for match in re.finditer(r'\bclass\b\s+(\w+)', content):
+            start_pos = f"1.0+{match.start()}c"
+            end_pos = f"1.0+{match.start()}c+5c"  # Highlight 'class'
+            self.editor.tag_add("keyword", start_pos, end_pos)
+
+            start_pos = f"1.0+{match.start(1)}c"
+            end_pos = f"1.0+{match.end(1)}c"
+            self.editor.tag_add("class", start_pos, end_pos)
+
+        # Built-in functions
+        built_in_functions = dir(__builtins__)
+        for bif in built_in_functions:
+            start_pos = "1.0"
+            while True:
+                start_pos = self.editor.search(r'\b' + bif + r'\b', start_pos, stopindex=tk.END, regexp=True)
+                if not start_pos:
+                    break
+                end_pos = f"{start_pos}+{len(bif)}c"
+                self.editor.tag_add("builtin_function", start_pos, end_pos)
+                start_pos = end_pos
+
+        # Variables (simple heuristic: variable assignment pattern)
+        for match in re.finditer(r'\b(\w+)\s*=', content):
+            start_pos = f"1.0+{match.start(1)}c"
+            end_pos = f"1.0+{match.end(1)}c"
+            self.editor.tag_add("variable", start_pos, end_pos)
+
 
 
 def main():
