@@ -258,12 +258,12 @@ class MainWindow(tk.Tk):
 
     def run_local(self):
         if self.current_file.endswith('.py'):
-            command = f'python {self.current_file}'
             try:
-                output = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True, universal_newlines=True)
-                messagebox.showinfo("Output", output)
-            except subprocess.CalledProcessError as e:
-                messagebox.showerror("Error", e.output)
+                with open(self.current_file, 'r') as f:
+                    code = f.read()
+                exec(code)  # Execute the Python code directly
+            except Exception as e:
+                messagebox.showerror("Error", f"Error during execution: {e}")
         else:
             messagebox.showwarning("Warning", "Only Python files can be run.")
 
