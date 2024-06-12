@@ -120,7 +120,7 @@ class MainWindow(tk.Tk):
         # Add tags for syntax highlighting
         self.editor.tag_configure("keyword", foreground="blue")
         self.editor.tag_configure("string", foreground="green")
-        self.editor.tag_configure("comment", foreground="grey")
+        self.editor.tag_configure("comment", foreground="red")
         self.editor.tag_configure("function", foreground="purple")
 
     def show_context_menu(self, event):
