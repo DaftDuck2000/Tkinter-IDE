@@ -72,8 +72,7 @@ class MainWindow(tk.Tk):
         self.dir_tree.configure(yscrollcommand=self.tree_scrollbar.set)
 
         # Add a code editor with line numbers
-        self.line_numbers = tk.Text(self, width=4, padx=3, takefocus=0, border=0,
-                                    background='lightgrey', state='disabled', wrap='none')
+        self.line_numbers = tk.Text(self, width=4, padx=3, takefocus=0, border=0, background='lightgrey', state='disabled', wrap='none')
         self.line_numbers.place(x=220, y=50, height=800)
 
         self.editor = scrolledtext.ScrolledText(self, wrap=tk.WORD)
@@ -122,12 +121,11 @@ class MainWindow(tk.Tk):
         self.editor.tag_configure("string", foreground="green")
         self.editor.tag_configure("comment", foreground="red")
         self.editor.tag_configure("function", foreground="purple")
-        self.editor.tag_configure("import", foreground="orange")
-        self.editor.tag_configure("class", foreground="orange")
-        self.editor.tag_configure("variable", foreground="blue")
-        self.editor.tag_configure("special_keyword", foreground="orange")
         self.editor.tag_configure("special_keyword", foreground="orange")
         self.editor.tag_configure("builtin_function", foreground="purple")
+        self.editor.tag_configure("import", foreground="purple")
+        self.editor.tag_configure("class", foreground="blue")
+        self.editor.tag_configure("variable", foreground="blue")
 
     def show_context_menu(self, event):
         # Select the item under the mouse pointer
@@ -203,8 +201,9 @@ class MainWindow(tk.Tk):
         selected_item = self.dir_tree.selection()[0]
         file_path = self.dir_tree.item(selected_item, 'values')[0]
         if os.path.isfile(file_path) and (file_path.endswith('.txt') or file_path.endswith('.py')):
-            self.save()
-            self.open_file_path(file_path)
+            self.save()  # Save the current file before opening a new one
+            self.open_file_path(file_path)  # Use the existing open_file_path function
+
 
     def open_file_path(self, file_path):
         if file_path:
@@ -228,22 +227,16 @@ class MainWindow(tk.Tk):
         self.line_numbers.config(state='disabled')
 
     def sync_scroll(self, event):
-        # Get the current scroll position of the editor
-        editor_scroll = self.editor.yview()
-        # Update the scroll position of the line numbers to match the editor
-        self.line_numbers.yview_moveto(editor_scroll[0])
+        self.line_numbers.yview_moveto(self.editor.yview()[0])
+
+    def new_file(self):
+        self.save()
+        self.editor.delete('1.0', tk.END)
+        self.current_file = ''
 
     def open_file(self):
-        file_path = filedialog.askopenfilename(title='Open File')
-        if file_path:
-            self.open_file_path(file_path)
-
-    def save_as(self):
-        if self.current_file:
-            file_path = filedialog.asksaveasfilename(initialfile=self.current_file, title='Save As')
-            if file_path:
-                self.current_file = file_path
-                self.save()
+        file_path = filedialog.askopenfilename(title='Open File', filetypes=[('Text Files', '*.txt'), ('Python Files', '*.py')])
+        self.open_file_path(file_path)
 
     def save(self):
         if self.current_file:
@@ -252,94 +245,61 @@ class MainWindow(tk.Tk):
                     f.write(self.editor.get('1.0', tk.END))
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save file: {e}")
+        elif self.current_file == '':
+            pass
+        else:
+            self.save_as()
 
-    def new_file(self):
-        file_path = filedialog.asksaveasfilename(title='New File')
+    def save_as(self):
+        file_path = filedialog.asksaveasfilename(title='Save File As', filetypes=[('Text Files', '*.txt'), ('Python Files', '*.py')])
         if file_path:
-            try:
-                with open(file_path, "w") as f:
-                    f.write("# - Happy Coding! - #")
-                self.editor.delete('1.0', tk.END)
-                with open(file_path, "r") as f:
-                    self.editor.insert(tk.END, f.read())
-                self.current_file = file_path
-                self.update_line_numbers()
-                self.highlight_syntax()
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to create new file: {e}")
+            self.current_file = file_path
+            self.save()
 
     def run_local(self):
-        if self.current_file:
+        if self.current_file.endswith('.py'):
+            command = f'python {self.current_file}'
             try:
-                subprocess.run(["python", self.current_file])
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to run file: {e}")
-
-    def find_text(self):
-        search_term = simpledialog.askstring("Find", "Enter text to find:")
-        if search_term:
-            self.highlight_text(search_term)
-            self.create_search_window()
-
-    def highlight_text(self, search_term):
-        self.editor.tag_remove('highlight', '1.0', tk.END)
-        self.search_matches = []
-        start_pos = '1.0'
-        while True:
-            start_pos = self.editor.search(search_term, start_pos, stopindex=tk.END)
-            if not start_pos:
-                break
-            end_pos = f'{start_pos}+{len(search_term)}c'
-            self.editor.tag_add('highlight', start_pos, end_pos)
-            self.search_matches.append((start_pos, end_pos))
-            start_pos = end_pos
-        self.editor.tag_config('highlight', background='yellow', foreground='black')
-        self.current_match_index = 0
-        self.scroll_to_match()
-
-    def create_search_window(self):
-        self.search_window = tk.Toplevel(self)
-        self.search_window.title("Find")
-        self.search_window.geometry("220x50")
-
-        next_button = tk.Button(self.search_window, text="Next", command=self.next_match)
-        next_button.pack(side=tk.LEFT, padx=10, pady=10)
-
-        prev_button = tk.Button(self.search_window, text="Previous", command=self.previous_match)
-        prev_button.pack(side=tk.LEFT, padx=10, pady=10)
-
-        cancel_button = tk.Button(self.search_window, text="Cancel", command=self.cancel_search)
-        cancel_button.pack(side=tk.LEFT, padx=10, pady=10)
-
-    def scroll_to_match(self):
-        if self.search_matches:
-            match = self.search_matches[self.current_match_index]
-            self.editor.see(match[0])
-            self.editor.mark_set("insert", match[0])
-            self.editor.tag_remove('current_match', '1.0', tk.END)
-            self.editor.tag_add('current_match', match[0], match[1])
-            self.editor.tag_config('current_match', background='orange')
-
-    def next_match(self):
-        if self.search_matches:
-            self.current_match_index = (self.current_match_index + 1) % len(self.search_matches)
-            self.scroll_to_match()
-
-    def previous_match(self):
-        if self.search_matches:
-            self.current_match_index = (self.current_match_index - 1) % len(self.search_matches)
-            self.scroll_to_match()
-
-    def cancel_search(self):
-        self.editor.tag_remove('highlight', '1.0', tk.END)
-        self.editor.tag_remove('current_match', '1.0', tk.END)
-        if self.search_window:
-            self.search_window.destroy()
-            self.search_window = None
+                output = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True, universal_newlines=True)
+                messagebox.showinfo("Output", output)
+            except subprocess.CalledProcessError as e:
+                messagebox.showerror("Error", e.output)
+        else:
+            messagebox.showwarning("Warning", "Only Python files can be run.")
 
     def on_key_release(self, event):
-        self.highlight_syntax()
         self.update_line_numbers()
+        self.highlight_syntax()
+
+    def find_text(self):
+        search_term = simpledialog.askstring("Find", "Enter search term:")
+        if search_term:
+            self.search_matches = []
+            self.current_match_index = -1
+
+            start_pos = '1.0'
+            while True:
+                start_pos = self.editor.search(search_term, start_pos, stopindex=tk.END)
+                if not start_pos:
+                    break
+
+                end_pos = f'{start_pos}+{len(search_term)}c'
+                self.search_matches.append((start_pos, end_pos))
+                start_pos = end_pos
+
+            if self.search_matches:
+                self.current_match_index = 0
+                self.highlight_search_match()
+
+    def highlight_search_match(self):
+        self.editor.tag_remove('search', '1.0', tk.END)
+
+        if self.search_matches:
+            start_pos, end_pos = self.search_matches[self.current_match_index]
+            self.editor.tag_add('search', start_pos, end_pos)
+            self.editor.mark_set(tk.INSERT, start_pos)
+            self.editor.see(start_pos)
+            self.editor.tag_config('search', background='yellow')
 
     def highlight_syntax(self):
         self.editor.tag_remove("keyword", "1.0", tk.END)
@@ -354,6 +314,12 @@ class MainWindow(tk.Tk):
 
         content = self.editor.get("1.0", tk.END)
 
+        # Comments (apply this first)
+        for match in re.finditer(r'#[^\n]*', content):
+            start_pos = f"1.0+{match.start()}c"
+            end_pos = f"1.0+{match.end()}c"
+            self.editor.tag_add("comment", start_pos, end_pos)
+
         # Keywords
         for kw_word in kw.kwlist:
             start_pos = "1.0"
@@ -365,29 +331,19 @@ class MainWindow(tk.Tk):
                 self.editor.tag_add("keyword", start_pos, end_pos)
                 start_pos = end_pos
 
-        # Special keywords
-        special_keywords = ['return', 'True', 'False', 'if', 'not', 'and', 'or', 'pass']
-        for special_kw in special_keywords:
-            start_pos = "1.0"
-            while True:
-                start_pos = self.editor.search(r'\b' + special_kw + r'\b', start_pos, stopindex=tk.END, regexp=True)
-                if not start_pos:
-                    break
-                end_pos = f"{start_pos}+{len(special_kw)}c"
-                self.editor.tag_add("special_keyword", start_pos, end_pos)
-                start_pos = end_pos
+        #Special Characters
+        special_keywords = r'(?<!#)\b(?:return|True|False|if|not|and|or|pass|in|for|while)\b'
+        for match in re.finditer(special_keywords, content):
+            start_pos = f"1.0+{match.start()}c"
+            end_pos = f"1.0+{match.end()}c"
+            self.editor.tag_add("special_keyword", start_pos, end_pos)
+            start_pos = end_pos
 
         # Strings
         for match in re.finditer(r'(\".*?\"|\'.*?\')', content):
             start_pos = f"1.0+{match.start()}c"
             end_pos = f"1.0+{match.end()}c"
             self.editor.tag_add("string", start_pos, end_pos)
-
-        # Comments
-        for match in re.finditer(r'#[^\n]*', content):
-            start_pos = f"1.0+{match.start()}c"
-            end_pos = f"1.0+{match.end()}c"
-            self.editor.tag_add("comment", start_pos, end_pos)
 
         # Functions (highlighting the 'def' keyword and function name)
         for match in re.finditer(r'\bdef\b\s+(\w+)', content):
@@ -400,7 +356,7 @@ class MainWindow(tk.Tk):
             self.editor.tag_add("function", start_pos, end_pos)
 
         # Imports
-        for match in re.finditer(r'\bimport\b\s+(\w+)', content):
+        for match in re.finditer(r'\b(?:import|from)\b\s+(\w+)', content):
             start_pos = f"1.0+{match.start()}c"
             end_pos = f"1.0+{match.start()}c+6c"  # Highlight 'import'
             self.editor.tag_add("import", start_pos, end_pos)
@@ -438,10 +394,12 @@ class MainWindow(tk.Tk):
             self.editor.tag_add("variable", start_pos, end_pos)
 
 
-
-def main():
+if __name__ == '__main__':
     app = MainWindow()
     app.mainloop()
 
-if __name__ == '__main__':
-    main()
+# change
+
+
+
+
